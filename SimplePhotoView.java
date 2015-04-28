@@ -32,30 +32,37 @@ public class SimplePhotoView extends SimpleDraweeView implements View.OnTouchLis
     private boolean isAutoScale;
     private float mCurrentScale = 1.0f;
     private final Matrix mCurrentMatrix;
+	//the center of x-axle
     private float mMidX;
+	//the center of y-axle
     private float mMidY;
+	
     private final float[] matrixValues = new float[9];
+	
     private GestureDetector mGestureDetector;
-
+	//set the maximum of zoom, and the median. The minimum is mCurrentScale
+	
+	
     public static float SCALE_MAX = 2.0f;
     public static float SCALE_MID = 1.5f;
 
-    public PinchToZoomDraweeView(Context context) {
+    public SimplePhotoView(Context context) {
         this(context, null);
     }
 
-    public PinchToZoomDraweeView(Context context, AttributeSet attrs) {
+    public SimplePhotoView(Context context, AttributeSet attrs) {
         this(context, attrs, 0);
     }
 
-    public PinchToZoomDraweeView(Context context, AttributeSet attrs, int defStyle) {
+    public SimplePhotoView(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
+		//initialize ScaleGestureDetector. Capture the 
         mScaleListener = new ScaleGestureDetector.SimpleOnScaleGestureListener() {
             @Override
             public boolean onScale(ScaleGestureDetector detector) {
                 float scaleFactor = detector.getScaleFactor();
                 float newScale = mCurrentScale * scaleFactor;
-                LogUtils.d("scaleFactor=" + scaleFactor + ",newScale=" + newScale);
+               // LogUtils.d("scaleFactor=" + scaleFactor + ",newScale=" + newScale);
                 // Prevent from zooming out more than original
                 if (newScale > 1.0f && newScale < SCALE_MAX) {
                     if (mMidX == 0.0f) {
@@ -76,6 +83,7 @@ public class SimplePhotoView extends SimpleDraweeView implements View.OnTouchLis
         };
         mScaleDetector = new ScaleGestureDetector(getContext(), mScaleListener);
         mCurrentMatrix = new Matrix();
+		//initialize GestureDetector, Capture double tap event
         mGestureDetector = new GestureDetector(context,
                 new GestureDetector.SimpleOnGestureListener() {
                     @Override
@@ -89,7 +97,7 @@ public class SimplePhotoView extends SimpleDraweeView implements View.OnTouchLis
                             newscale = 1.0f;
                         }
                         mCurrentScale = newscale;
-                        PinchToZoomDraweeView.this.postDelayed(new AutoRunableZoom(newscale), 16);
+                        SimplePhotoView.this.postDelayed(new AutoRunableZoom(newscale), 16);
                         isAutoScale = true;
                         return true;
                     }
@@ -103,10 +111,12 @@ public class SimplePhotoView extends SimpleDraweeView implements View.OnTouchLis
     private int mTouchSlop;
     private boolean isCheckTopAndBottom = true;
     private boolean isCheckLeftAndRight = true;
+	//the heigh and width of the image
     private int bitmapW, bitmapH;
 
     @Override
     public boolean onTouch(View v, MotionEvent event) {
+		//first pass events to  estureDetector(doubleTap) and ScaleDetector
         if (mGestureDetector.onTouchEvent(event))
             return true;
         mScaleDetector.onTouchEvent(event);
@@ -114,7 +124,7 @@ public class SimplePhotoView extends SimpleDraweeView implements View.OnTouchLis
         float x = 0, y = 0;
         // pointer num count
         final int pointerCount = event.getPointerCount();
-
+		//get more average values of x and y of several tough points
         for (int i = 0; i < pointerCount; i++) {
             x += event.getX(i);
             y += event.getY(i);
@@ -151,14 +161,18 @@ public class SimplePhotoView extends SimpleDraweeView implements View.OnTouchLis
                 if (isCanDrag) {
                     if (getDrawable() != null) {
                         isCheckLeftAndRight = isCheckTopAndBottom = true;
+						//  if it is not wide enough for the screen, then the left and right movement is forbidden.
                         if (rectF.width() < getWidth()) {
                             isCheckLeftAndRight = false;
                         }
+						//  If it is not high enough for the screen, then the up and down movement is forbidden.
                         if (rectF.height() < getHeight()) {
                             isCheckTopAndBottom = false;
                         }
                         mCurrentMatrix.postTranslate(dx, dy);
                         checkMatrixBounds();
+						// Please pay attention here, after Matrix.postTranslate, do not use setImageMatrix(matrix). Use the method of invalidate(). 
+						// Becuase the drawee will not extend the ImageView, there is no way to make ImageView functional.
                         invalidate();
                     }
                 }
@@ -175,28 +189,44 @@ public class SimplePhotoView extends SimpleDraweeView implements View.OnTouchLis
         return true;
     }
 
-	// you can get it from ControllerListener or Postprocessor 
+	/**
+	 *Drawee top-level-drawable doesn't expose its intrinsic dimensions is because intrinsic dimensions change when the image loads 
+	 * so  they return -1, But when we use RectF, we have to use the width and height of bitmap
+	 *    You can get the width and height in two ways and set
+	 * Postprocessor : http://frescolib.org/docs/modifying-image.html#_
+	 * ControllerListener : http://frescolib.org/docs/listening-download-events.html#_
+	 */ 
     public void setBitmapWandH(int width, int height) {
         bitmapH = height;
         bitmapW = width;
     }
 
-
+	
+	/**
+	 * 
+	 *getDrawable can not be used here. TopLevelDrawable is not a BitmapDrawable getintrinsic return -1
+	 *  Use setBitmapWandH() to get width and height
+	 */
     private RectF getMatrixRectF() {
         RectF rect = new RectF();
         rect.set(0, 0, bitmapW, bitmapH);
+		//real bounds of the image in the view
         getHierarchy().getActualImageBounds(rect);
         Matrix matrix = mCurrentMatrix;
         matrix.mapRect(rect);
         return rect;
     }
-
+	
+	/**
+	 * when  During the move, the bounded is checked. The width and height which is oversized of the screen is checked.
+	 *
+	 */
     private void checkMatrixBounds() {
         RectF rect = getMatrixRectF();
         float deltaX = 0, deltaY = 0;
         final float viewWidth = getWidth();
         final float viewHeight = getHeight();
-
+		//  After the movement and zoom, whether it is over the screen eage is checked.
         if (rect.top > 0 && isCheckTopAndBottom) {
             deltaY = -rect.top;
         }
@@ -211,18 +241,23 @@ public class SimplePhotoView extends SimpleDraweeView implements View.OnTouchLis
         }
         mCurrentMatrix.postTranslate(deltaX, deltaY);
     }
-
+	
     private boolean isCanDrag(float dx, float dy) {
         return Math.sqrt((dx * dx) + (dy * dy)) >= mTouchSlop;
     }
-
+	
+	
+	/**
+	 *  automatically zoom event
+	 */
     private class AutoRunableZoom implements Runnable {
-
+		// progressive show is better 
         static final float BIGGER = 1.07f;
         static final float SMALLER = 0.93f;
         private float mTargetScale;
         private float tmpScale;
-
+		
+		// input the target scale. According to the target scale and the current scale, to become smaller or bigger is checked.
         public AutoRunableZoom(float TargetScale) {
             this.mTargetScale = TargetScale;
             if (getScale() < mTargetScale) {
@@ -240,13 +275,18 @@ public class SimplePhotoView extends SimpleDraweeView implements View.OnTouchLis
 
         @Override
         public void run() {
+			 //  zoom in and out
+			 // please pay attention here. Do not use setImageMatrix(matrix) after Matrix.postScale. Use the method of invalidate()
+			 //  Because drawee can not extend ImageView, there is no way to use ImageView. 
             mCurrentMatrix.postScale(tmpScale, tmpScale, mMidX, mMidY);
             invalidate();
             mCurrentScale = getScale() > SCALE_MAX ? SCALE_MAX : getScale() < 1.0f ? 1.0f : getScale();
+			//  If the value is in , keep zooming
             if (((tmpScale > 1f) && (mCurrentScale < mTargetScale))
                     || ((tmpScale < 1f) && (mTargetScale < mCurrentScale))) {
-                PinchToZoomDraweeView.this.postDelayed(this, 16);
+                SimplePhotoView.this.postDelayed(this, 16);
             } else {
+				// Set the target ratio scale
                 final float deltaScale = mTargetScale / mCurrentScale;
                 mCurrentMatrix.postScale(deltaScale, deltaScale, mMidX, mMidY);
                 invalidate();
@@ -255,7 +295,7 @@ public class SimplePhotoView extends SimpleDraweeView implements View.OnTouchLis
         }
     }
 
-
+	
     public final float getScale() {
         mCurrentMatrix.getValues(matrixValues);
         return matrixValues[Matrix.MSCALE_X];
@@ -270,7 +310,10 @@ public class SimplePhotoView extends SimpleDraweeView implements View.OnTouchLis
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
     }
-
+	
+	/**
+	 * Here, you have to £¬http://frescolib.org/docs/writing-custom-views.html#_
+	 */
     @Override
     protected void onDraw(@NonNull Canvas canvas) {
         int saveCount = canvas.save();
@@ -278,7 +321,12 @@ public class SimplePhotoView extends SimpleDraweeView implements View.OnTouchLis
         super.onDraw(canvas);
         canvas.restoreToCount(saveCount);
     }
-
+	
+	/**
+	 *Here, you have to£¬http://frescolib.org/docs/writing-custom-views.html#_
+	 * 
+	 */
+	
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         return mScaleDetector.onTouchEvent(event) || super.onTouchEvent(event);
