@@ -72,7 +72,7 @@ public class SimplePhotoView extends SimpleDraweeView implements View.OnTouchLis
                         mMidY = getHeight() / 2;//from center to zoom
                     }
                     mCurrentScale = newScale;
-                    PinchToZoomDraweeView.this.postDelayed(new AutoRunableZoom(newScale), 16);
+                    SimplePhotoView.this.postDelayed(new AutoRunableZoom(newScale), 16);
                 } else if (newScale > SCALE_MAX) {
                     newScale = SCALE_MAX;
                     mCurrentScale = newScale;
